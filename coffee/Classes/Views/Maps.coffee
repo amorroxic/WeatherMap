@@ -20,7 +20,7 @@ class Maps extends EventEmitter
 			zoom: 4
 			center: dublin
 			maxZoom: 5
-			mapTypeId: google.maps.MapTypeId.SATELLITE
+			mapTypeId: google.maps.MapTypeId.TERRAIN
 
 		@mapInstance = new google.maps.Map @parentElement, mapOptions
 

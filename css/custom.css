@@ -187,6 +187,17 @@ button.blue-pill {
 	margin-top: 10px;
 	font-weight: 400;
 	font-size: 0.8em;
+	color: #fff;
+	background:#000;
+    -webkit-border-radius: 10px;
+    -moz-border-radius: 10px;
+    border-radius: 10px;
+    -webkit-box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15) inset;
+    -moz-box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15) inset;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15) inset;
+    border: 2px solid #d1d1d1;
+    padding: 0 5px 10px 5px;
+    z-index: 4000;
 }
 
 .forecast {

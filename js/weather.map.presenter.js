@@ -955,7 +955,7 @@
         zoom: 4,
         center: dublin,
         maxZoom: 5,
-        mapTypeId: google.maps.MapTypeId.SATELLITE
+        mapTypeId: google.maps.MapTypeId.TERRAIN
       };
       this.mapInstance = new google.maps.Map(this.parentElement, mapOptions);
     }
