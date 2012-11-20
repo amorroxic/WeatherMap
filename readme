@@ -1,1 +1,43 @@
-Will come later
+HTML5, Google Geocoder, Google Maps, WorldWeatherOnline API calls,
+glued together by CoffeeScript.
+==================================================================
+This is only a demo / proof of concept and it's supposed to be run inside a HTML5 compliant browser. Any decent version of Firefox, Chrome, Safari should do the job.
+Makes use of the HTML5 mobile boilerplate and a little bit of jQuery
+
+Links:
+======
+Demo: http://weathermap.nouauzina.ro/
+Sources: https://github.com/amorroxic/WeatherMap
+
+Inner core:
+===========
+The app (tries to) implement an MVP pattern. The mothership resides in https://github.com/amorroxic/WeatherMap/blob/master/js/weather.map.presenter.js
+
+weather.map.presenter.js was generated from two CoffeeScript source files:
+The startup file:
+https://github.com/amorroxic/WeatherMap/blob/master/coffee/start.coffee
+
+and the main presenter class which links everything together:
+https://github.com/amorroxic/WeatherMap/blob/master/coffee/WeatherMapPresenter.coffee
+
+Design patterns:
+================
+I tried to implement an MVP design pattern trying to isolate the components as much as possible in order to allow re-usage. There is the main presenter class (https://github.com/amorroxic/WeatherMap/blob/master/coffee/WeatherMapPresenter.coffee
+), the models (https://github.com/amorroxic/WeatherMap/tree/master/coffee/Classes/Models), the view (https://github.com/amorroxic/WeatherMap/blob/master/coffee/Classes/Views/Maps.coffee), a couple of wrapper classes (a Google autocomplete wrapper, a localStorage wrapper, a Google geocoder wrapper and an Ajax wrapper which uses jQuery) and an archetypal events class.
+
+Although jQuery wasn't very much used - only a couple of selectors and the ajax stuff which could very well be implemented via querySelector/querySelectorAll and native XMLHTTPRequests - there was no need to re-invent the wheel as the higher purpose was a different one. Comfort food, that is.
+
+All components are linked together via an Observer pattern in order to allow decoupling. However, the events flowing around are not native DOM events - no reason to propagate everything throughout the DOM as this would impact overall performance - they're actually callbacks having accessor methods implemented by the EventEmitter. Cool thing about that is that once an object is invalidated, all its "events" disappear with it.
+
+Thanks to CoffeeScript, there is a pseudo-OOP kind of flow. The CoffeeScript classes result in JS function prototypes each wrapped inside anonymous functions in order to keep the global namespace clean. Classes "extend" each other - actually this is done via a Decorator pattern - populating function properties and prototypes with other functions' properties.
+
+Graceful degradation:
+=====================
+It's a small step to achieve. It can start with a HTML5 shiv for HTML5 tags. DOM selectors are already there from jQuery. LocalStorage is already being wrapped inside a class (https://github.com/amorroxic/WeatherMap/blob/master/coffee/Classes/Wrappers/LocalStorage.coffee), that class can implement an alternative means of storing data (with cookies for instance) inside the "store", "retrieve" and "remove" methods.
+
+Unit testing:
+=============
+Not implemented. Should have started with that in the first place :) Thing is it takes time, time which I preferred to use for polishing the general look.
+
+Oh, please test this via a web server.
+Thanks for checking it out!
