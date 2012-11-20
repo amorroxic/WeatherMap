@@ -36,6 +36,7 @@ class Maps extends EventEmitter
 			content: forecastIcon
 			disableAutoPan: true
 			zIndex: null
+			pixelOffset: new google.maps.Size(6, -17)
 			boxClass: 'tooltip'
 			closeBoxURL: 'img/close.png'
 			closeBoxMargin: '-25px -22px 0 0'
