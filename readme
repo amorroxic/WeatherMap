@@ -34,6 +34,8 @@ Graceful degradation:
 =====================
 It's a small step to achieve. It can start with a HTML5 shiv for HTML5 tags. DOM selectors are already there from jQuery. LocalStorage is already being wrapped inside a class (https://github.com/amorroxic/WeatherMap/blob/master/coffee/Classes/Wrappers/LocalStorage.coffee), that class can implement an alternative means of storing data (with cookies for instance) inside the "store", "retrieve" and "remove" methods.
 
+Due to the fact that they aren't implemented however, I took the decision not to instantiate any Shim, Sizzle, Modernizr or any other such package inside the index. No reason for clutter.
+
 Unit testing:
 =============
 Not implemented. Should have started with that in the first place :) Thing is it takes time, time which I preferred to use for polishing the general look.
