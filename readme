@@ -1,6 +1,6 @@
-HTML5, Google Geocoder, Google Maps, WorldWeatherOnline API calls,
-glued together by CoffeeScript.
-==================================================================
+HTML5, Google Geocoder, Google Maps, WorldWeatherOnline API calls, glued together
+by CoffeeScript.
+=================================================================================
 This is only a demo / proof of concept and it's supposed to be run inside a HTML5 compliant browser. Any decent version of Firefox, Chrome, Safari should do the job.
 Makes use of the HTML5 mobile boilerplate and a little bit of jQuery
 
@@ -22,8 +22,7 @@ https://github.com/amorroxic/WeatherMap/blob/master/coffee/WeatherMapPresenter.c
 
 Design patterns:
 ================
-I tried to implement an MVP design pattern trying to isolate the components as much as possible in order to allow re-usage. There is the main presenter class (https://github.com/amorroxic/WeatherMap/blob/master/coffee/WeatherMapPresenter.coffee
-), the models (https://github.com/amorroxic/WeatherMap/tree/master/coffee/Classes/Models), the view (https://github.com/amorroxic/WeatherMap/blob/master/coffee/Classes/Views/Maps.coffee), a couple of wrapper classes (a Google autocomplete wrapper, a localStorage wrapper, a Google geocoder wrapper and an Ajax wrapper which uses jQuery) and an archetypal events class.
+I tried to implement an MVP design pattern with the purpose of isolating the components as much as possible in order to allow re-usage. There is the main presenter class (https://github.com/amorroxic/WeatherMap/blob/master/coffee/WeatherMapPresenter.coffee), the models (https://github.com/amorroxic/WeatherMap/tree/master/coffee/Classes/Models), the view (https://github.com/amorroxic/WeatherMap/blob/master/coffee/Classes/Views/Maps.coffee), a couple of wrapper classes (a Google autocomplete wrapper, a localStorage wrapper, a Google geocoder wrapper, an Ajax wrapper which uses jQuery) and an archetypal events class.
 
 Although jQuery wasn't very much used - only a couple of selectors and the ajax stuff which could very well be implemented via querySelector/querySelectorAll and native XMLHTTPRequests - there was no need to re-invent the wheel as the higher purpose was a different one. Comfort food, that is.
 
