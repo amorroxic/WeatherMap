@@ -51,8 +51,8 @@ class WeatherMapPresenter
 	handleLocationRemovedFromMap: (cityID) =>
 		@cities.removeCity cityID
 
-	handleAutocompleteAddCity: (cityName) =>
-		@cities.generateIdAndAddCity cityName
+	handleAutocompleteAddCity: (geolocatedCity) =>
+		@cities.generateIdAndAddCity geolocatedCity
 
 	handleAutocompleteLocationNotFound: () =>
 		console.log 'Location not found'

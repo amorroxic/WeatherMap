@@ -1,9 +1,7 @@
 class Cities extends LocalStorage
 
 	cacheKey			= null
-	@autoIncrement		= null
-	@locations			= null
-	@cityDescriptors 	= null
+	@cities				= null
 	defaults 			= ['Dublin', 'London', 'Paris', 'Barcelona']
 	loadCount			= null
 
@@ -14,34 +12,36 @@ class Cities extends LocalStorage
 	@CITIES_UNKNOWN 		= "city_unknown"
 
 	constructor: () ->
-		cacheKey 			= 'cities'
-		@locations			= {}
-		@cityDescriptors 	= []
-		@autoIncrement		= 0
+		cacheKey 			= 'geoweather'
+		@cities 			= []
 		loadCount			= 0
 
 	cacheSave: () ->
-		cacheObject = {'autoIncrement':@autoIncrement, 'cities': @cityDescriptors}
+		data 	= []
+		for city in @cities
+			fullCityData = do city.getData
+			delete fullCityData.forecast
+			fullCityData.forecast = {}
+			data.push fullCityData
+		cacheObject = {'cities': data}
 		@store cacheKey, cacheObject
 
 	populate: () ->
-
+		locations = []
 		data = @retrieve cacheKey
-		if data? and data.autoIncrement? and data.cities?
-			@autoIncrement = data.autoIncrement
-			@cityDescriptors = data.cities
+		if data? and data.cities?
+			locations = data.cities
 		else
-			i = 0
+			i=0
 			for cityName in defaults
 				i++
-				@cityDescriptors.push {'id':i, 'name':cityName}
-			@autoIncrement = i+1
-			do @cacheSave
+				locations.push {'id':i, 'name':cityName, 'coords':{}}
 
-		for cityDescriptor in @cityDescriptors
+		for location in locations
 			params =
-				id : cityDescriptor.id
-				name : cityDescriptor.name
+				id 		: location.id
+				name 	: location.name
+				coords  : location.coords
 			@addCityToStructure params
 
 	addCityToStructure: (params) ->
@@ -50,87 +50,84 @@ class Cities extends LocalStorage
 		city.addListener City.CITY_UNKNOWN, @handleCityUnknown
 		city.addListener City.CITY_FORECAST_SUCCESS, @handleCityForecastSuccess
 		city.addListener City.CITY_FORECAST_FAILED, @handleCityForecastFail
-		do city.populate
+		do city.initialize
 
-	generateIdAndAddCity: (cityName) ->
-		if not @cityExists cityName
-			cityID = @autoIncrement
-			@cityDescriptors.push {'id':cityID, 'name':cityName}
-			@autoIncrement++
-			do @cacheSave
+	generateIdAndAddCity: (geolocatedCity) ->
+		if not @cityExists geolocatedCity.name
+			cityID = do @getNewCityId
 			params =
-				id : cityID
-				name : cityName
+				id 		: cityID
+				name 	: geolocatedCity.name
+				coords  : geolocatedCity.coordinates
 			@addCityToStructure params
 
 	cityExists: (cityName) ->
-		for descriptor in @cityDescriptors
-			if cityName is descriptor.name
+		for city in @cities
+			if cityName is city.name
 				return yes
 		return no
 
+	getNewCityId: () ->
+		newId = 1
+		for city in @cities
+			if city.id > newId
+				newId = city.id
+		newId++
+		newId
+
+	findCityIndexForId: (cityID) ->
+		i = 0
+		for city in @cities
+			if city.id is cityID
+				return i
+			i++
+		return -1
+
 	removeCity: (cityID) ->
 		realCityID = parseInt(cityID,10);
-		@cityDescriptors = @cityDescriptors.filter (descriptor) -> descriptor.id isnt realCityID
-		if @locations[cityID]
-			do @locations[cityID].destroy
-			delete @locations[cityID]
+		@cities = @cities.filter (city) -> city.id isnt realCityID
 		do @cacheSave
 		loadCount--
 
 	handleCityLoaded: (cityData) =>
-		i = 0
-		for descriptor in @cityDescriptors
-			@cityDescriptors[i].name = cityData.location if cityData.id is descriptor.id
-			i++
-		do @cacheSave
-		@locations[cityData.id] = cityData
-		params =
-			id : cityData.id
-			name : cityData.location
-			coords : cityData.coordinates
-			overview : do cityData.getForecastOverview
-			forecast : cityData.forecast
-		@emitEvent Cities.CITIES_NEW, [params]
+		@cities.push cityData
 		loadCount++
-		if loadCount >= @cityDescriptors.length
+		data 				= do cityData.getData
+		do @cacheSave
+		@emitEvent Cities.CITIES_NEW, [data]
+		if loadCount >= @cities.length
 			@emitEvent Cities.CITIES_COMPLETE, []
 
 	handleCityUnknown: (cityData) =>
 		params =
-			id : cityData.id
-			name : cityData.location
+			id 		: cityData.id
+			name 	: cityData.location
 		@emitEvent Cities.CITIES_UNKNOWN, [params]
 
 	handleCityForecastSuccess: (cityData) =>
-		params =
-			id : cityData.id
-			name : cityData.location
-			coords : cityData.coordinates
-			overview : do cityData.getForecastOverview
-			forecast : cityData.forecast
-		status = do cityData.hasValidForecast
-		if status
-			@emitEvent Cities.CITIES_UPDATE, [params]
-		else
-			@emitEvent Cities.CITIES_FAILURE, [params]
+		data = do cityData.getData
+		cityIndex = @findCityIndexForId cityData.id
+		if cityIndex >= 0
+			@cities[cityIndex] 		= cityData
+			do @cacheSave
+			status 					= do cityData.hasValidForecast
+			if status
+				@emitEvent Cities.CITIES_UPDATE, [data]
+			else
+				@emitEvent Cities.CITIES_FAILURE, [data]
 
 	handleCityForecastFail: (cityData) =>
-		params =
-			id : cityData.id
-			name : cityData.location
-			coords : cityData.coordinates
-			overview : do cityData.getForecastOverview
-		@emitEvent Cities.CITIES_FAILURE, [params]
+		data = do cityData.getData
+		cityIndex = @findCityIndexForId cityData.id
+		if cityIndex >= 0
+			@emitEvent Cities.CITIES_FAILURE, [data]
 
 	coldRefreshForecasts: ->
-		for cityID of @locations
-			city = @locations[cityID]
+		for city in @cities
 			do city.refreshForecast
 
 	mildRefreshForecasts: ->
-		for cityID of @locations
-			city = @locations[cityID]
+		for city in @cities
 			validForecast = do city.hasValidForecast
 			if not validForecast
 				do city.refreshForecast

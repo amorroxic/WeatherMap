@@ -61,13 +61,13 @@ class Maps extends EventEmitter
 		contentText = params.overview
 		boxText = $('<div></div>').attr('rel',params.id).html(contentText)
 
-		if params.forecast.current?
+		if params.forecast? and params.forecast.current?
 			forecastImage = $('<img></img>').attr('src',params.forecast.current.icon).width(26)
 			holder = $('<div></div>').addClass('forecast-icon')
 			forecastImage.appendTo holder
 			holder.appendTo boxText
 
-		if params.forecast.days?
+		if params.forecast? and params.forecast.days?
 			forecastHolder = $('<div></div>').addClass('forecast-prognose').addClass('hide').attr('id','prognose-'+params.id)
 			for day of params.forecast.days
 				if day is params.forecast.current.date

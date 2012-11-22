@@ -85,8 +85,8 @@
       return this.cities.removeCity(cityID);
     };
 
-    WeatherMapPresenter.prototype.handleAutocompleteAddCity = function(cityName) {
-      return this.cities.generateIdAndAddCity(cityName);
+    WeatherMapPresenter.prototype.handleAutocompleteAddCity = function(geolocatedCity) {
+      return this.cities.generateIdAndAddCity(geolocatedCity);
     };
 
     WeatherMapPresenter.prototype.handleAutocompleteLocationNotFound = function() {
@@ -343,7 +343,7 @@
     };
 
     AutoComplete.prototype.handleAutocomplete = function() {
-      var component, country, locality, place, placeName, _i, _len, _ref;
+      var component, country, locality, output, place, _i, _len, _ref;
       place = this.autocompleteInstance.getPlace();
       if (!place.geometry) {
         this.emitEvent(AutoComplete.AUTOCOMPLETE_NOTFOUND, []);
@@ -359,9 +359,14 @@
           country = component.long_name;
         }
       }
-      placeName = locality + ', ' + country;
-      console.log(place);
-      this.emitEvent(AutoComplete.AUTOCOMPLETE_QUERY, [placeName]);
+      output = {
+        name: locality + ', ' + country,
+        coordinates: {
+          'latitude': place.geometry.location.lat(),
+          'longitude': place.geometry.location.lng()
+        }
+      };
+      this.emitEvent(AutoComplete.AUTOCOMPLETE_QUERY, [output]);
       return false;
     };
 
@@ -460,6 +465,8 @@
 
     City.weatherAPI = null;
 
+    City.lockQueryForecast = null;
+
     City.CITY_LOADED = "city_cache_loaded";
 
     City.CITY_UNKNOWN = "city_is_unknown";
@@ -479,33 +486,36 @@
       this.id = params.id;
       this.location = params.name;
       this.forecast = {};
-      this.coordinates = null;
+      if (params.coords != null) {
+        this.coordinates = params.coords;
+      } else {
+        this.coordinates = {};
+      }
       this.hasForecast = false;
       this.isGeolocated = false;
+      this.lockQueryForecast = false;
       this.weatherAPI = "http://free.worldweatheronline.com/feed/weather.ashx";
     }
 
-    City.prototype.populate = function() {
+    City.prototype.initialize = function() {
       var isInitialized;
-      isInitialized = this.cacheLoad();
+      isInitialized = this.populateData();
       if (isInitialized) {
         return this.emitEvent(City.CITY_LOADED, [this]);
       }
     };
 
-    City.prototype.cacheLoad = function() {
-      var data, loaded, validForecast;
+    City.prototype.populateData = function() {
+      var loaded, validForecast;
       loaded = false;
       if (this.id != null) {
-        data = this.retrieve(this.id);
-        if (data != null) {
-          this.isGeolocated = this.populateCoordinates(data);
+        if (this.coordinates != null) {
+          this.isGeolocated = this.hasValidCoordinates();
           if (!this.isGeolocated) {
             this.geolocateMe();
           } else {
             loaded = true;
-            if ((data.forecast != null) && (data.forecast.current != null)) {
-              this.forecast = data.forecast;
+            if ((this.forecast != null) && (this.forecast.current != null)) {
               validForecast = this.hasValidForecast();
               if (validForecast) {
                 this.hasForecast = true;
@@ -519,31 +529,10 @@
       return loaded;
     };
 
-    City.prototype.cacheSave = function() {
-      var saved;
-      saved = false;
-      if (this.id != null) {
-        this.store(this.id, this);
-        saved = true;
-      }
-      return saved;
-    };
-
-    City.prototype.destroy = function() {
-      this.remove(this.id);
-      this.isGeolocated = false;
-      this.hasForecast = false;
-      return this.forecast = {};
-    };
-
-    City.prototype.populateCoordinates = function(data) {
+    City.prototype.hasValidCoordinates = function() {
       var foundCoordinates;
       foundCoordinates = false;
-      if (data.coordinates != null) {
-        this.location = data.location;
-        this.coordinates = {};
-        this.coordinates.latitude = data.coordinates.latitude;
-        this.coordinates.longitude = data.coordinates.longitude;
+      if ((this.coordinates != null) && (this.coordinates.latitude != null) && (this.coordinates.longitude != null)) {
         foundCoordinates = true;
       }
       return foundCoordinates;
@@ -561,8 +550,8 @@
 
     City.prototype.geolocationSuccess = function(data) {
       this.location = data.location;
-      this.isGeolocated = this.populateCoordinates(data);
-      this.cacheSave();
+      this.coordinates = data.coordinates;
+      this.isGeolocated = this.hasValidCoordinates();
       return this.emitEvent(City.CITY_LOADED, [this]);
     };
 
@@ -572,24 +561,27 @@
 
     City.prototype.refreshForecast = function() {
       var params, request;
-      console.log("Refreshing forecast for: " + this.location);
-      request = new Ajax(this.weatherAPI);
-      request.addListener(Ajax.LOAD_SUCCESS, this.forecastSuccess);
-      request.addListener(Ajax.LOAD_FAILED, this.forecastFailure);
-      params = {
-        'q': this.location,
-        'format': 'json',
-        'num_of_days': 2,
-        'key': 'bbfbbfb160072942122708'
-      };
-      return request.perform(params);
+      if (!this.lockQueryForecast) {
+        console.log("Refreshing forecast for: " + this.location);
+        this.lockQueryForecast = true;
+        request = new Ajax(this.weatherAPI);
+        request.addListener(Ajax.LOAD_SUCCESS, this.forecastSuccess);
+        request.addListener(Ajax.LOAD_FAILED, this.forecastFailure);
+        params = {
+          'q': this.location,
+          'format': 'json',
+          'num_of_days': 2,
+          'key': 'bbfbbfb160072942122708'
+        };
+        return request.perform(params);
+      }
     };
 
     City.prototype.forecastSuccess = function(result) {
+      this.lockQueryForecast = false;
       if (!(result.data.error != null)) {
         this.populateForecast(result.data);
         this.hasForecast = true;
-        this.cacheSave();
         return this.emitEvent(City.CITY_FORECAST_SUCCESS, [this]);
       } else {
         return this.emitEvent(City.CITY_FORECAST_FAILED, [this]);
@@ -597,6 +589,7 @@
     };
 
     City.prototype.forecastFailure = function(data) {
+      this.lockQueryForecast = false;
       return this.emitEvent(City.CITY_FORECAST_FAILED, [this]);
     };
 
@@ -676,11 +669,21 @@
       return contentText;
     };
 
-    City.prototype.showData = function() {};
+    City.prototype.getData = function() {
+      var params;
+      params = {
+        id: this.id,
+        name: this.location,
+        coords: this.coordinates,
+        forecast: this.forecast,
+        overview: this.getForecastOverview()
+      };
+      return params;
+    };
 
     return City;
 
-  })(LocalStorage);
+  })(EventEmitter);
 
   /* --------------------------------------------
        Begin Cities.coffee
@@ -695,11 +698,7 @@
 
     cacheKey = null;
 
-    Cities.autoIncrement = null;
-
-    Cities.locations = null;
-
-    Cities.cityDescriptors = null;
+    Cities.cities = null;
 
     defaults = ['Dublin', 'London', 'Paris', 'Barcelona'];
 
@@ -723,48 +722,53 @@
       this.handleCityUnknown = __bind(this.handleCityUnknown, this);
 
       this.handleCityLoaded = __bind(this.handleCityLoaded, this);
-      cacheKey = 'cities';
-      this.locations = {};
-      this.cityDescriptors = [];
-      this.autoIncrement = 0;
+      cacheKey = 'geoweather';
+      this.cities = [];
       loadCount = 0;
     }
 
     Cities.prototype.cacheSave = function() {
-      var cacheObject;
+      var cacheObject, city, data, fullCityData, _i, _len, _ref;
+      data = [];
+      _ref = this.cities;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        city = _ref[_i];
+        fullCityData = city.getData();
+        delete fullCityData.forecast;
+        fullCityData.forecast = {};
+        data.push(fullCityData);
+      }
       cacheObject = {
-        'autoIncrement': this.autoIncrement,
-        'cities': this.cityDescriptors
+        'cities': data
       };
       return this.store(cacheKey, cacheObject);
     };
 
     Cities.prototype.populate = function() {
-      var cityDescriptor, cityName, data, i, params, _i, _j, _len, _len1, _ref, _results;
+      var cityName, data, i, location, locations, params, _i, _j, _len, _len1, _results;
+      locations = [];
       data = this.retrieve(cacheKey);
-      if ((data != null) && (data.autoIncrement != null) && (data.cities != null)) {
-        this.autoIncrement = data.autoIncrement;
-        this.cityDescriptors = data.cities;
+      if ((data != null) && (data.cities != null)) {
+        locations = data.cities;
       } else {
         i = 0;
         for (_i = 0, _len = defaults.length; _i < _len; _i++) {
           cityName = defaults[_i];
           i++;
-          this.cityDescriptors.push({
+          locations.push({
             'id': i,
-            'name': cityName
+            'name': cityName,
+            'coords': {}
           });
         }
-        this.autoIncrement = i + 1;
-        this.cacheSave();
       }
-      _ref = this.cityDescriptors;
       _results = [];
-      for (_j = 0, _len1 = _ref.length; _j < _len1; _j++) {
-        cityDescriptor = _ref[_j];
+      for (_j = 0, _len1 = locations.length; _j < _len1; _j++) {
+        location = locations[_j];
         params = {
-          id: cityDescriptor.id,
-          name: cityDescriptor.name
+          id: location.id,
+          name: location.name,
+          coords: location.coords
         };
         _results.push(this.addCityToStructure(params));
       }
@@ -778,76 +782,80 @@
       city.addListener(City.CITY_UNKNOWN, this.handleCityUnknown);
       city.addListener(City.CITY_FORECAST_SUCCESS, this.handleCityForecastSuccess);
       city.addListener(City.CITY_FORECAST_FAILED, this.handleCityForecastFail);
-      return city.populate();
+      return city.initialize();
     };
 
-    Cities.prototype.generateIdAndAddCity = function(cityName) {
+    Cities.prototype.generateIdAndAddCity = function(geolocatedCity) {
       var cityID, params;
-      if (!this.cityExists(cityName)) {
-        cityID = this.autoIncrement;
-        this.cityDescriptors.push({
-          'id': cityID,
-          'name': cityName
-        });
-        this.autoIncrement++;
-        this.cacheSave();
+      if (!this.cityExists(geolocatedCity.name)) {
+        cityID = this.getNewCityId();
         params = {
           id: cityID,
-          name: cityName
+          name: geolocatedCity.name,
+          coords: geolocatedCity.coordinates
         };
         return this.addCityToStructure(params);
       }
     };
 
     Cities.prototype.cityExists = function(cityName) {
-      var descriptor, _i, _len, _ref;
-      _ref = this.cityDescriptors;
+      var city, _i, _len, _ref;
+      _ref = this.cities;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        descriptor = _ref[_i];
-        if (cityName === descriptor.name) {
+        city = _ref[_i];
+        if (cityName === city.name) {
           return true;
         }
       }
       return false;
     };
 
+    Cities.prototype.getNewCityId = function() {
+      var city, newId, _i, _len, _ref;
+      newId = 1;
+      _ref = this.cities;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        city = _ref[_i];
+        if (city.id > newId) {
+          newId = city.id;
+        }
+      }
+      newId++;
+      return newId;
+    };
+
+    Cities.prototype.findCityIndexForId = function(cityID) {
+      var city, i, _i, _len, _ref;
+      i = 0;
+      _ref = this.cities;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        city = _ref[_i];
+        if (city.id === cityID) {
+          return i;
+        }
+        i++;
+      }
+      return -1;
+    };
+
     Cities.prototype.removeCity = function(cityID) {
       var realCityID;
       realCityID = parseInt(cityID, 10);
-      this.cityDescriptors = this.cityDescriptors.filter(function(descriptor) {
-        return descriptor.id !== realCityID;
+      this.cities = this.cities.filter(function(city) {
+        return city.id !== realCityID;
       });
-      if (this.locations[cityID]) {
-        this.locations[cityID].destroy();
-        delete this.locations[cityID];
-      }
       this.cacheSave();
       return loadCount--;
     };
 
     Cities.prototype.handleCityLoaded = function(cityData) {
-      var descriptor, i, params, _i, _len, _ref;
-      i = 0;
-      _ref = this.cityDescriptors;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        descriptor = _ref[_i];
-        if (cityData.id === descriptor.id) {
-          this.cityDescriptors[i].name = cityData.location;
-        }
-        i++;
-      }
-      this.cacheSave();
-      this.locations[cityData.id] = cityData;
-      params = {
-        id: cityData.id,
-        name: cityData.location,
-        coords: cityData.coordinates,
-        overview: cityData.getForecastOverview(),
-        forecast: cityData.forecast
-      };
-      this.emitEvent(Cities.CITIES_NEW, [params]);
+      var data;
+      this.cities.push(cityData);
       loadCount++;
-      if (loadCount >= this.cityDescriptors.length) {
+      data = cityData.getData();
+      this.cacheSave();
+      this.emitEvent(Cities.CITIES_NEW, [data]);
+      if (loadCount >= this.cities.length) {
         return this.emitEvent(Cities.CITIES_COMPLETE, []);
       }
     };
@@ -862,48 +870,47 @@
     };
 
     Cities.prototype.handleCityForecastSuccess = function(cityData) {
-      var params, status;
-      params = {
-        id: cityData.id,
-        name: cityData.location,
-        coords: cityData.coordinates,
-        overview: cityData.getForecastOverview(),
-        forecast: cityData.forecast
-      };
-      status = cityData.hasValidForecast();
-      if (status) {
-        return this.emitEvent(Cities.CITIES_UPDATE, [params]);
-      } else {
-        return this.emitEvent(Cities.CITIES_FAILURE, [params]);
+      var cityIndex, data, status;
+      data = cityData.getData();
+      cityIndex = this.findCityIndexForId(cityData.id);
+      if (cityIndex >= 0) {
+        this.cities[cityIndex] = cityData;
+        this.cacheSave();
+        status = cityData.hasValidForecast();
+        if (status) {
+          return this.emitEvent(Cities.CITIES_UPDATE, [data]);
+        } else {
+          return this.emitEvent(Cities.CITIES_FAILURE, [data]);
+        }
       }
     };
 
     Cities.prototype.handleCityForecastFail = function(cityData) {
-      var params;
-      params = {
-        id: cityData.id,
-        name: cityData.location,
-        coords: cityData.coordinates,
-        overview: cityData.getForecastOverview()
-      };
-      return this.emitEvent(Cities.CITIES_FAILURE, [params]);
+      var cityIndex, data;
+      data = cityData.getData();
+      cityIndex = this.findCityIndexForId(cityData.id);
+      if (cityIndex >= 0) {
+        return this.emitEvent(Cities.CITIES_FAILURE, [data]);
+      }
     };
 
     Cities.prototype.coldRefreshForecasts = function() {
-      var city, cityID, _results;
+      var city, _i, _len, _ref, _results;
+      _ref = this.cities;
       _results = [];
-      for (cityID in this.locations) {
-        city = this.locations[cityID];
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        city = _ref[_i];
         _results.push(city.refreshForecast());
       }
       return _results;
     };
 
     Cities.prototype.mildRefreshForecasts = function() {
-      var city, cityID, validForecast, _results;
+      var city, validForecast, _i, _len, _ref, _results;
+      _ref = this.cities;
       _results = [];
-      for (cityID in this.locations) {
-        city = this.locations[cityID];
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        city = _ref[_i];
         validForecast = city.hasValidForecast();
         if (!validForecast) {
           _results.push(city.refreshForecast());
@@ -1001,13 +1008,13 @@
       var boxText, contentText, currentForecast, day, forecastHolder, forecastImage, holder, prognoseFor;
       contentText = params.overview;
       boxText = $('<div></div>').attr('rel', params.id).html(contentText);
-      if (params.forecast.current != null) {
+      if ((params.forecast != null) && (params.forecast.current != null)) {
         forecastImage = $('<img></img>').attr('src', params.forecast.current.icon).width(26);
         holder = $('<div></div>').addClass('forecast-icon');
         forecastImage.appendTo(holder);
         holder.appendTo(boxText);
       }
-      if (params.forecast.days != null) {
+      if ((params.forecast != null) && (params.forecast.days != null)) {
         forecastHolder = $('<div></div>').addClass('forecast-prognose').addClass('hide').attr('id', 'prognose-' + params.id);
         for (day in params.forecast.days) {
           if (day === params.forecast.current.date) {

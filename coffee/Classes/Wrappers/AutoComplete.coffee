@@ -18,7 +18,6 @@ class AutoComplete extends EventEmitter
 
 	bindToGoogleMap: (gmapInstance) ->
 		@autocompleteInstance.bindTo 'bounds', gmapInstance
-		#@autocompleteInstance.setTypes ['']
 		google.maps.event.addListener @autocompleteInstance, 'place_changed', @handleAutocomplete
 
 	handleAutocomplete: () =>
@@ -31,8 +30,13 @@ class AutoComplete extends EventEmitter
 			locality 	= component.long_name if 'locality' in component.types and !locality
 			country 	= component.long_name if 'country' in component.types and !country
 
-		placeName = locality + ', ' + country
-		console.log place
-		@emitEvent AutoComplete.AUTOCOMPLETE_QUERY, [placeName]
+		output =
+			name : locality + ', ' + country
+			coordinates	: {
+				'latitude'	: place.geometry.location.lat(),
+				'longitude'	: place.geometry.location.lng()
+			}
+
+		@emitEvent AutoComplete.AUTOCOMPLETE_QUERY, [output]
 		return false
 

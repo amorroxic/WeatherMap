@@ -1,4 +1,4 @@
-class City extends LocalStorage
+class City extends EventEmitter
 
 	@id 				= null
 	@location 			= null
@@ -7,6 +7,7 @@ class City extends LocalStorage
 	@isGeolocated 		= null
 	@hasForecast 		= null
 	@weatherAPI 		= null
+	@lockQueryForecast  = null
 
 	@CITY_LOADED 	 		= "city_cache_loaded"
 	@CITY_UNKNOWN 			= "city_is_unknown"
@@ -17,29 +18,30 @@ class City extends LocalStorage
 		@id 				= params.id
 		@location			= params.name
 		@forecast 			= {}
-		@coordinates		= null
+		if params.coords?
+			@coordinates 	= params.coords
+		else
+			@coordinates	= {}
 		@hasForecast 		= no
 		@isGeolocated 		= no
+		@lockQueryForecast  = no
 		@weatherAPI 		= "http://free.worldweatheronline.com/feed/weather.ashx"
 
-
-	populate: () ->
-		isInitialized 		= do @cacheLoad
+	initialize: () ->
+		isInitialized 		= do @populateData
 		if isInitialized
 			@emitEvent City.CITY_LOADED, [@]
 
-	cacheLoad: () ->
+	populateData: () ->
 		loaded = no
 		if @id?
-			data = @retrieve @id
-			if data?
-				@isGeolocated = @populateCoordinates data
+			if @coordinates?
+				@isGeolocated = do @hasValidCoordinates
 				if not @isGeolocated
 					do @geolocateMe
 				else
 					loaded = yes
-					if data.forecast? and data.forecast.current?
-						@forecast = data.forecast
+					if @forecast? and @forecast.current?
 						validForecast = do @hasValidForecast
 						if validForecast
 							@hasForecast = yes
@@ -48,26 +50,9 @@ class City extends LocalStorage
 
 		loaded
 
-	cacheSave: () ->
-		saved = no
-		if @id?
-			@store @id, @
-			saved = yes
-		saved
-
-	destroy: () ->
-		@remove @id
-		@isGeolocated = no
-		@hasForecast = no
-		@forecast = {}
-
-	populateCoordinates: (data) ->
+	hasValidCoordinates: () ->
 		foundCoordinates = no
-		if data.coordinates?
-			@location = data.location
-			@coordinates = {}
-			@coordinates.latitude = data.coordinates.latitude
-			@coordinates.longitude = data.coordinates.longitude
+		if @coordinates? and @coordinates.latitude? and @coordinates.longitude?
 			foundCoordinates = yes
 		foundCoordinates
 
@@ -81,36 +66,39 @@ class City extends LocalStorage
 
 	geolocationSuccess: (data) =>
 		@location = data.location
-		@isGeolocated = @populateCoordinates data
-		do @cacheSave
+		@coordinates = data.coordinates
+		@isGeolocated = do @hasValidCoordinates
 		@emitEvent City.CITY_LOADED, [@]
 
 	geolocationFailure: (text) =>
 		@emitEvent City.CITY_UNKNOWN, [@]
 
 	refreshForecast: () ->
-		console.log "Refreshing forecast for: "+@location
-		request = new Ajax @weatherAPI
-		request.addListener Ajax.LOAD_SUCCESS, @forecastSuccess
-		request.addListener Ajax.LOAD_FAILED, @forecastFailure
-		params = {
-			'q'				: @location,
-			'format'		: 'json',
-			'num_of_days'	: 2,
-			'key'			: 'bbfbbfb160072942122708'
-		}
-		request.perform params
+		if not @lockQueryForecast
+			console.log "Refreshing forecast for: "+@location
+			@lockQueryForecast = yes
+			request = new Ajax @weatherAPI
+			request.addListener Ajax.LOAD_SUCCESS, @forecastSuccess
+			request.addListener Ajax.LOAD_FAILED, @forecastFailure
+			params = {
+				'q'				: @location,
+				'format'		: 'json',
+				'num_of_days'	: 2,
+				'key'			: 'bbfbbfb160072942122708'
+			}
+			request.perform params
 
 	forecastSuccess: (result) =>
+		@lockQueryForecast = no
 		if not result.data.error?
 			@populateForecast result.data
 			@hasForecast = yes
-			do @cacheSave
 			@emitEvent City.CITY_FORECAST_SUCCESS, [@]
 		else
 			@emitEvent City.CITY_FORECAST_FAILED, [@]
 
 	forecastFailure: (data) =>
+		@lockQueryForecast = no
 		@emitEvent City.CITY_FORECAST_FAILED, [@]
 
 	populateForecast: (data) ->
@@ -180,5 +168,11 @@ class City extends LocalStorage
 			contentText =  @location + ' at ' + @forecast.current.time + ': '+@forecast.current.temp.c + '&deg;C, ' + @forecast.current.description
 		contentText
 
-	showData: () ->
-		# console.log @
+	getData: () ->
+		params =
+			id 			: @id
+			name 		: @location
+			coords 		: @coordinates
+			forecast 	: @forecast
+			overview 	: do @getForecastOverview
+		params
